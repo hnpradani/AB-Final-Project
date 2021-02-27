@@ -1,0 +1,106 @@
+#======================CLEANING
+# Cleaning the data and removing null/missing/ negative values and creating subset and converting to factors for variables like InvoiceNo,StockCode, InvoiceDate, CustomerID, Country.
+library(stringr)
+isUndesirable2 = function(x) {
+  str_detect(toupper(x),"WRONG") | str_detect(toupper(x),"LOST") |
+    str_detect(toupper(x),"CRUSHED") | str_detect(toupper(x),"DAMAGE") |
+    str_detect(toupper(x),"FOUND") | str_detect(toupper(x),"THROWN") |
+    str_detect(toupper(x),"SMASHED") |
+    str_detect(toupper(x),"\\?") |
+    str_detect(toupper(x),"AWAY") | str_detect(toupper(x),"CHARGES") |
+    str_detect(toupper(x),"FEE") | str_detect(toupper(x),"FAULT")
+  str_detect(toupper(x),"SALES") | str_detect(toupper(x),"ADJUST") |
+    str_detect(toupper(x),"COUNTED") |
+    str_detect(toupper(x),"INCORRECT") |
+    str_detect(toupper(x),"BROKEN") | str_detect(toupper(x),"BARCODE") |
+    str_detect(toupper(x),"RETURNED") |
+    str_detect(toupper(x),"MAILOUT") | str_detect(toupper(x),"DELIVERY") |
+    str_detect(toupper(x),"MIX UP") | str_detect(toupper(x),"MOULDY") |
+    str_detect(toupper(x),"PUT ASIDE") | str_detect(toupper(x),"ERROR") |
+    str_detect(toupper(x),"DESTROYED") | str_detect(toupper(x),"RUSTY") |
+    str_detect(toupper(x),"MANUAL") | str_detect(toupper(x),"AMAZON") |
+    str_detect(toupper(x),"FEE") | str_detect(toupper(x),"POSTAGE") |
+    str_detect(toupper(x),"PADS") | str_detect(x, "Bank")
+}
+
+EcommDataClean <- Ecommdata[which(Ecommdata$Quantity>=0 & !is.na(Ecommdata$Quantity) &  Ecommdata$UnitPrice >=0 & !is.na(Ecommdata$UnitPrice) & !is.na(Ecommdata$CustomerID)),]
+
+EcommDataClean$InvoiceNo<- factor(EcommDataClean$InvoiceNo)
+EcommDataClean$StockCode<- factor(EcommDataClean$StockCode)
+EcommDataClean$CustomerID<- factor(EcommDataClean$CustomerID)
+EcommDataClean$Country<- factor(EcommDataClean$Country)
+EcommDataClean$InvoiceDate<- as.Date(EcommDataClean$InvoiceDate, '%m/%d/%Y %H:%M')
+
+# Adding a new column of total purchase price i.e( Unit price * Quantity)
+
+EcommDataClean$TotalPrice <- EcommDataClean$UnitPrice * EcommDataClean$Quantity
+
+#Adding three columns Day, month and year by splitting the invoice date.
+
+EcommDataClean$DateYear <- as.numeric(format(EcommDataClean$InvoiceDate, format = "%Y"))
+EcommDataClean$DateMonth <- as.numeric(format(EcommDataClean$InvoiceDate, format = "%m"))
+EcommDataClean$DateDay <- as.numeric(format(EcommDataClean$InvoiceDate, format = "%d"))
+
+# Converting them to factors.
+
+EcommDataClean$DateYear<- factor(EcommDataClean$DateYear)
+EcommDataClean$DateMonth<- factor(EcommDataClean$DateMonth)
+EcommDataClean$DateDay<- factor(EcommDataClean$DateDay)
+EcommDataClean$Quarter<- factor(EcommDataClean$Quarter)
+
+#Menjalankan fungsi isundesirable
+EcommDataClean = EcommDataClean[which(!isUndesirable2(as.character(EcommDataClean$Description))),]
+
+#Menghilangkan Carriage
+EcommDataClean = EcommDataClean[which(!startsWith(as.character(EcommDataClean$StockCode), "C")),]
+
+#View(EcommDataClean)
+
+
+#================1a
+OverallPricePerCustomer <-  aggregate(EcommDataClean$TotalPrice, by=list(CustomerID=EcommDataClean$CustomerID), FUN=sum)
+
+barplot(height = OverallPricePerCustomer$x, names.arg = OverallPricePerCustomer$CustomerID, xlab = "Pelanggan", ylab = "Total Transaksi", main = "Total Transaksi per Pelanggan Unik")
+
+
+#====================================================1b
+library(ggplot2)
+library(plyr)
+library(dplyr)
+
+CustomerbyCountry <- select(EcommDataClean, c(7,8))
+count_CustIDRecord <- ddply(CustomerbyCountry, .(CustomerbyCountry$Country, CustomerbyCountry$CustomerID), nrow)
+names(count_CustIDRecord) <- c("Country", "CustomerID", "Frequency")
+
+CustomerbyCountry <- select(count_CustIDRecord, c(1))
+count_CustIDRecord <- ddply(CustomerbyCountry, .(CustomerbyCountry$Country), nrow)
+names(count_CustIDRecord) <- c("Country", "Number of Unique Customer")
+CustomerbyCountry <- count_CustIDRecord
+
+View(CustomerbyCountry)
+
+#CustomerbyCountry <- reorder(CustomerbyCountry$Country,-CustomerbyCountry$`Number of Unique Customer`)
+ggplot(CustomerbyCountry, aes(x=reorder(CustomerbyCountry$Country,-CustomerbyCountry$`Number of Unique Customer`), y=CustomerbyCountry$`Number of Unique Customer`)) +
+  geom_bar(stat="identity", fill="#009999") + theme_bw() +
+  xlab("Negara") +
+  ylab("Jumlah Pelanggan Unik") +
+  ggtitle("Jumlah Pelanggan Unik dalam Tiap Negara")
+
+#===============1c
+
+library(ggplot2) 
+ProductbyPrice <- EcommDataClean[,c(2,3,6)] 
+
+View(ProductbyPrice) 
+
+ProductbyPrice <- distinct(ProductbyPrice) 
+ProductbyPrice <- ProductbyPrice[ProductbyPrice$UnitPrice>0,]
+
+sd(ProductbyPrice$UnitPrice) 
+min(ProductbyPrice$UnitPrice) 
+max(ProductbyPrice$UnitPrice) 
+mean(ProductbyPrice$UnitPrice) 
+
+qplot(ProductbyPrice$UnitPrice, geom="histogram",binwidth = 20,
+      main = "Persebaran Harga Produk", xlab = "Unit Price", ylab = "Jumlah", 
+      fill=I("blue"), alpha=I(.2)) 
